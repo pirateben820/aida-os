@@ -14,6 +14,25 @@ from aidad.settings import Settings
 
 log = logging.getLogger(__name__)
 
+# Alpha agents — only AIDA and Hermes active
+_ALPHA_AGENTS = ["aida", "hermes"]
+
+
+def _load_agent(name: str):
+    agents = {
+        "aida":     ("agents.aida",     "AidaAgent"),
+        "hermes":   ("agents.hermes",   "HermesAgent"),
+        "archon":   ("agents.archon",   "ArchonAgent"),
+        "sysadmin": ("agents.sysadmin", "SysadminAgent"),
+        "security": ("agents.security", "SecurityAgent"),
+        "research": ("agents.research", "ResearchAgent"),
+        "storage":  ("agents.storage",  "StorageAgent"),
+    }
+    module_path, class_name = agents[name]
+    import importlib
+    mod = importlib.import_module(module_path)
+    return getattr(mod, class_name)()
+
 
 class AidaDaemon:
     def __init__(self, settings: Settings) -> None:
@@ -38,7 +57,6 @@ class AidaDaemon:
             return None
 
     async def _start_seeding_installed_models(self) -> None:
-        """Seed every starter model that Ollama has already pulled."""
         if self.seeder is None:
             return
         for model in self.registry.all():
@@ -52,13 +70,23 @@ class AidaDaemon:
             except Exception as exc:
                 log.warning("Could not seed %s: %s", model.id, exc)
 
+    async def _start_agents(self) -> None:
+        """Start alpha agents on the NATS bus."""
+        for name in _ALPHA_AGENTS:
+            try:
+                agent = _load_agent(name)
+                asyncio.create_task(agent.run(), name=f"agent-{name}")
+                log.info("Started agent: %s", name)
+            except Exception as exc:
+                log.error("Failed to start agent '%s': %s", name, exc)
+
     async def run(self) -> None:
         log.info("Hardware: %s", self.hardware.to_dict())
         log.info("Models in registry: %d", len(self.registry.all()))
 
         asyncio.create_task(self._start_seeding_installed_models())
+        asyncio.create_task(self._start_agents())
 
-        # Start self-improve loop inside the daemon process
         from aidad.selfimprove import improve_loop
         asyncio.create_task(improve_loop())
 
