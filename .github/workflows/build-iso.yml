@@ -35,13 +35,11 @@ jobs:
               pacman-key --populate archlinux
               pacman -Sy --noconfirm archiso
 
+              mkdir -p /tmp/aida-src
+              cp -r /aida-os/. /tmp/aida-src/
+              rm -rf /tmp/aida-src/.git /tmp/aida-src/__pycache__ /tmp/aida-src/.venv /tmp/aida-src/dist
               mkdir -p /aida-os/archiso/airootfs/opt/aida-os
-              cp -r /aida-os/. /aida-os/archiso/airootfs/opt/aida-os/
-              rm -rf \
-                /aida-os/archiso/airootfs/opt/aida-os/.git \
-                /aida-os/archiso/airootfs/opt/aida-os/__pycache__ \
-                /aida-os/archiso/airootfs/opt/aida-os/.venv \
-                /aida-os/archiso/airootfs/opt/aida-os/dist
+              cp -r /tmp/aida-src/. /aida-os/archiso/airootfs/opt/aida-os/
 
               mkarchiso -v -w /tmp/aida-work -o /dist /aida-os/archiso
 
