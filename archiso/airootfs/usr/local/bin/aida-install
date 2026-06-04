@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""AIDA OS disk installer.
+
+Uses archinstall (Arch's official library) for all partitioning and
+base-system work. We only add the AIDA-specific layer on top.
+
+Run automatically on live boot, or manually: aida-install
+"""
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.prompt import Confirm, Prompt
+    console = Console()
+    def p(t="", **kw): console.print(t, **kw)
+    def ask(q): return Prompt.ask(f"[bold cyan]{q}[/bold cyan]")
+    def confirm(q): return Confirm.ask(f"[bold yellow]{q}[/bold yellow]")
+except ImportError:
+    def p(t="", **kw): print(t)
+    def ask(q): return input(f"{q}: ")
+    def confirm(q): return input(f"{q} [y/N]: ").lower() == "y"
+
+
+AIDA_REPO = "https://github.com/aida-os/aida-os"   # placeholder — update when repo is public
+AIDA_SRC_ON_ISO = Path("/opt/aida-os")              # pre-copied onto the ISO
+
+
+def banner():
+    art = """
+    ░█████╗░██╗██████╗░░█████╗░     ░█████╗░░██████╗
+    ██╔══██╗██║██╔══██╗██╔══██╗    ██╔══██╗██╔════╝
+    ███████║██║██║  ██║███████║    ██║  ██║╚█████╗░
+    ██╔══██║██║██║  ██║██╔══██║    ██║  ██║░╚═══██╗
+    ██║  ██║██║██████╔╝██║  ██║    ╚█████╔╝██████╔╝
+    """
+    p(Panel(art, subtitle="[bold]AIDA OS Alpha — Disk Installer[/bold]", style="blue"))
+
+
+def check_vm():
+    """Warn if not running inside a VM."""
+    try:
+        result = subprocess.run(
+            ["systemd-detect-virt"], capture_output=True, text=True
+        )
+        virt = result.stdout.strip()
+        if virt in ("none", ""):
+            p("\n[bold red]WARNING:[/bold red] This looks like a physical machine.")
+            p("AIDA OS alpha is designed for VMs only (VirtualBox / QEMU / VMware).")
+            if not confirm("Install anyway on physical hardware?"):
+                p("Installer cancelled.")
+                sys.exit(0)
+        else:
+            p(f"\n[green]VM detected:[/green] {virt}")
+    except FileNotFoundError:
+        pass
+
+
+def run_archinstall():
+    """Hand off disk setup to archinstall."""
+    p("\n[bold]Launching archinstall for disk setup…[/bold]")
+    p("Select your disk, filesystem, and user account.")
+    p("When archinstall finishes, AIDA OS will continue the setup.\n")
+    subprocess.run(["archinstall", "--config", "/opt/aida-os/archiso/archinstall.json"], check=False)
+
+
+def install_aida_to_target(mountpoint: str = "/mnt"):
+    """Copy AIDA OS source to the installed system and set up services."""
+    target = Path(mountpoint)
+    dest   = target / "opt" / "aida-os"
+    dest.mkdir(parents=True, exist_ok=True)
+
+    p("\n[bold]Installing AIDA OS layer…[/bold]")
+
+    # Copy source from ISO
+    subprocess.run(["cp", "-r", str(AIDA_SRC_ON_ISO) + "/.", str(dest)], check=True)
+
+    # Install Python deps inside the target chroot
+    p("  Installing Python dependencies…")
+    subprocess.run(
+        ["arch-chroot", mountpoint, "pip", "install", "-e", "/opt/aida-os[dev]", "--quiet"],
+        check=False,
+    )
+
+    # Enable systemd services (including sshd so the user can ssh aida@vm)
+    for svc in ["aidad.service", "aida-selfheal.service", "ollama.service",
+                "docker.service", "NetworkManager.service", "sshd.service"]:
+        subprocess.run(
+            ["arch-chroot", mountpoint, "systemctl", "enable", svc],
+            check=False,
+        )
+
+    # Create the 'aida' SSH user — password-less, ForceCommand drops into aida-chat
+    subprocess.run(
+        ["arch-chroot", mountpoint, "useradd", "-m", "-s", "/bin/bash", "-c",
+         "AIDA OS SSH access", "aida"],
+        check=False,
+    )
+    # Set a default password 'aida' — user should change it
+    subprocess.run(
+        ["arch-chroot", mountpoint, "bash", "-c", "echo 'aida:aida' | chpasswd"],
+        check=False,
+    )
+    p("  [green]✓ SSH enabled[/green] — connect with: ssh aida@<vm-ip>  (password: aida)")
+
+    # Schedule the setup wizard to run on first login
+    # firstboot script already embedded in the ISO airootfs — just ensure perms
+    firstboot = target / "etc" / "profile.d" / "aida-firstboot.sh"
+    if firstboot.exists():
+        firstboot.chmod(0o755)
+
+    p("  [green]✓ AIDA OS installed[/green]")
+
+
+def main():
+    if os.geteuid() != 0:
+        p("[red]Run as root (sudo aida-install)[/red]")
+        sys.exit(1)
+
+    banner()
+    p("This installer will:")
+    p("  1. Check you are running inside a VM")
+    p("  2. Use archinstall to partition the disk and install Arch Linux")
+    p("  3. Install the AIDA OS AI layer on top")
+    p("  4. On first boot, run an AI setup wizard to configure everything\n")
+
+    if not confirm("Continue?"):
+        p("Cancelled.")
+        sys.exit(0)
+
+    check_vm()
+    run_archinstall()
+    install_aida_to_target()
+
+    p("\n[bold green]Installation complete.[/bold green]")
+    p("Remove the ISO and reboot. The AI setup wizard will run on first login.")
+    if confirm("Reboot now?"):
+        subprocess.run(["reboot"])
+
+
+if __name__ == "__main__":
+    main()

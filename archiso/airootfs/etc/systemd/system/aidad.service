@@ -1,0 +1,18 @@
+[Unit]
+Description=AIDA OS Core Daemon
+After=network.target docker.service ollama.service
+Wants=ollama.service docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/aida-os
+EnvironmentFile=-/opt/aida-os/.env
+ExecStart=/opt/aida-os/.venv/bin/python -m aidad
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

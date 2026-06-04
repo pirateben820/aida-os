@@ -1,0 +1,18 @@
+[Unit]
+Description=AIDA OS Self-Heal Daemon
+After=aidad.service
+Requires=aidad.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/aida-os
+EnvironmentFile=-/opt/aida-os/.env
+ExecStart=/opt/aida-os/.venv/bin/python -m aidad.selfheal
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

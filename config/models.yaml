@@ -1,0 +1,87 @@
+# Model Registry
+# Disk budget: keep total pulled models under ~12GB to leave headroom on a 20GB install.
+#
+# Approximate sizes:
+#   qwen2.5-coder:7b   4.7 GB   ← auto-pulled by bootstrap
+#   deepseek-r1:1.5b   1.1 GB   ← auto-pulled by bootstrap
+#   nomic-embed-text   274 MB   ← auto-pulled by bootstrap
+#   ─────────────────────────
+#   Starter total      ~6.1 GB
+#
+# Optional (pull manually, see README):
+#   qwen2.5:7b         4.7 GB   (better general reasoning, replaces 1.5b)
+#   llava:7b           4.7 GB   (vision — only pull if you need it)
+#
+# Do NOT pull qwen2.5:14b (9 GB) or llava:13b (8 GB) unless you have >40 GB free.
+
+models:
+  # --- Starter set (auto-pulled) ---
+
+  - id: qwen2.5-coder:7b
+    provider: ollama
+    skills: [coding, general]
+    context_length: 32768
+    requirements:
+      vram_gb: 5
+      min_ram_gb: 8
+    starter: true
+
+  - id: deepseek-r1:1.5b
+    provider: ollama
+    skills: [reasoning, math, general]
+    context_length: 65536
+    requirements:
+      vram_gb: 2
+      min_ram_gb: 4
+    starter: true
+
+  - id: nomic-embed-text
+    provider: ollama
+    skills: [embedding]
+    context_length: 8192
+    requirements:
+      vram_gb: 1
+      min_ram_gb: 2
+    starter: true
+
+  # --- Optional local models (pull manually) ---
+
+  - id: qwen2.5:7b
+    provider: ollama
+    skills: [general, planning]
+    context_length: 32768
+    requirements:
+      vram_gb: 5
+      min_ram_gb: 8
+    starter: false
+
+  - id: llava:7b
+    provider: ollama
+    skills: [vision, general]
+    context_length: 4096
+    requirements:
+      vram_gb: 5
+      min_ram_gb: 8
+    starter: false
+
+  # --- Cloud fallbacks (no disk cost, requires API key in .env) ---
+
+  - id: claude-sonnet-4-6
+    provider: anthropic
+    skills: [coding, reasoning, planning, general, vision]
+    context_length: 200000
+    requirements:
+      vram_gb: 0
+      min_ram_gb: 0
+    cloud: true
+    starter: false
+
+  - id: gpt-4o-mini
+    provider: openai
+    skills: [coding, general, planning]
+    context_length: 128000
+    requirements:
+      vram_gb: 0
+      min_ram_gb: 0
+    cloud: true
+    starter: false

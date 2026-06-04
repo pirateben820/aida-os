@@ -1,0 +1,74 @@
+name: Build AIDA OS ISO
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:   # lets you trigger it manually from GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install archiso
+        run: |
+          sudo apt-get install -y curl
+          # Install an Arch Linux container to run mkarchiso
+          docker pull archlinux:latest
+
+      - name: Build ISO
+        run: |
+          mkdir -p dist
+
+          docker run --rm --privileged \
+            -v "${{ github.workspace }}:/aida-os" \
+            -v "${{ github.workspace }}/dist:/dist" \
+            archlinux:latest \
+            bash -c '
+              set -euo pipefail
+
+              pacman-key --init
+              pacman-key --populate archlinux
+              pacman -Sy --noconfirm archiso
+
+              mkdir -p /aida-os/archiso/airootfs/opt/aida-os
+              cp -r /aida-os/. /aida-os/archiso/airootfs/opt/aida-os/
+              rm -rf \
+                /aida-os/archiso/airootfs/opt/aida-os/.git \
+                /aida-os/archiso/airootfs/opt/aida-os/__pycache__ \
+                /aida-os/archiso/airootfs/opt/aida-os/.venv \
+                /aida-os/archiso/airootfs/opt/aida-os/dist
+
+              mkarchiso -v -w /tmp/aida-work -o /dist /aida-os/archiso
+
+              iso=$(ls /dist/*.iso | head -1)
+              mv "$iso" /dist/aida-os-alpha.iso
+            '
+
+      - name: Upload ISO as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aida-os-alpha
+          path: dist/aida-os-alpha.iso
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: alpha-${{ github.run_number }}
+          name: AIDA OS Alpha Build ${{ github.run_number }}
+          body: |
+            Automated alpha build from commit ${{ github.sha }}
+
+            **VM requirements:** 4 vCPUs · 8 GB RAM · 20 GB disk
+            **Tested hypervisors:** VirtualBox · QEMU/KVM · VMware
+
+            Boot the ISO, follow the installer, then `ssh aida@<vm-ip>`
+          files: dist/aida-os-alpha.iso
+          draft: false
+          prerelease: true

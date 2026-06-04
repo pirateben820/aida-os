@@ -1,0 +1,45 @@
+# Packages included in the live ISO image.
+# Keep this minimal — the ISO only needs to boot and run the installer.
+# Everything else gets installed to disk by archinstall.
+
+# Absolute minimum to boot
+base
+linux
+linux-firmware
+mkinitcpio
+
+# Boot loaders
+grub
+efibootmgr
+
+# Network (needed to pull packages during install)
+networkmanager
+dhcpcd
+
+# Disk tools used by archinstall
+parted
+gptfdisk
+e2fsprogs
+dosfstools
+btrfs-progs
+
+# archinstall — Arch's official installer (already on Arch ISO)
+archinstall
+
+# Python — runs our installer
+python
+python-pip
+
+# Our installer needs these at install-time
+git
+curl
+arch-install-scripts
+
+# Terminal for the installer UI
+terminus-font
+
+# Minimal shell utilities
+bash
+coreutils
+util-linux
+sudo

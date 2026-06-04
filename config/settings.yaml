@@ -1,0 +1,31 @@
+# AIDA OS Runtime Settings
+
+daemon:
+  host: "127.0.0.1"
+  port: 8421
+  log_level: "INFO"
+
+nats:
+  url: "nats://127.0.0.1:4222"
+
+ollama:
+  url: "http://127.0.0.1:11434"
+
+# vLLM is optional — used when Ollama cannot satisfy resource requirements
+vllm:
+  url: ""
+  enabled: false
+
+privacy:
+  # cloud_allowed: public data only goes to cloud by default
+  # personal: ask user before sending
+  # private: local only
+  # secret: never leaves device
+  default_cloud_policy: "ask"
+  air_gapped: false
+
+budget:
+  monthly_usd: 0   # 0 = no limit; set a positive number to enforce
+  warn_at_percent: 80
+
+local_first: true   # always try local models before cloud

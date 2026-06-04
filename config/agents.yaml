@@ -1,0 +1,118 @@
+# Agent Capability Definitions
+# Defines what each agent is allowed to do.
+# No agent gets unrestricted access.
+
+agents:
+  aida:
+    description: "Primary OS assistant — routes tasks, surfaces info, coordinates agents"
+    preferred_skills: [general, planning]
+    capabilities:
+      can:
+        - read_hardware_info
+        - read_system_metrics
+        - read_agent_status
+        - send_notifications
+        - route_tasks
+        - read_logs
+      cannot:
+        - write_files
+        - execute_shell
+        - manage_secrets
+        - delete_data
+
+  hermes:
+    description: "Personal assistant — long-term memory, preferences, scheduling"
+    preferred_skills: [general, reasoning]
+    capabilities:
+      can:
+        - read_user_memory
+        - write_user_memory
+        - read_calendar
+        - write_reminders
+        - read_projects
+        - write_projects
+      cannot:
+        - execute_shell
+        - manage_secrets
+        - network_access
+        - read_system_logs
+
+  archon:
+    description: "Coding harness — software development, git, testing, deployment"
+    preferred_skills: [coding, reasoning]
+    capabilities:
+      can:
+        - read_files
+        - write_files
+        - execute_shell_sandboxed
+        - git_operations
+        - read_logs
+        - create_containers
+      cannot:
+        - manage_secrets
+        - modify_system_config
+        - access_user_memory
+
+  sysadmin:
+    description: "Infrastructure manager — services, Docker, VMs, monitoring, backups"
+    preferred_skills: [reasoning, planning]
+    capabilities:
+      can:
+        - restart_services
+        - read_logs
+        - create_backups
+        - manage_containers
+        - manage_vms
+        - read_system_metrics
+        - modify_system_config
+      cannot:
+        - delete_storage_pool
+        - manage_secrets
+        - access_user_memory
+
+  security:
+    description: "Security monitor — firewall, intrusion detection, secret management, auditing"
+    preferred_skills: [reasoning]
+    capabilities:
+      can:
+        - read_firewall_rules
+        - write_firewall_rules
+        - read_auth_logs
+        - read_secrets_metadata
+        - trigger_security_alerts
+        - read_system_logs
+      cannot:
+        - read_secret_values
+        - write_files
+        - network_access_external
+        - access_user_memory
+
+  research:
+    description: "Research agent — internet search, documentation lookup, summarisation"
+    preferred_skills: [general, reasoning]
+    capabilities:
+      can:
+        - network_access_read
+        - read_documentation
+        - web_search
+      cannot:
+        - read_local_files
+        - write_files
+        - execute_shell
+        - access_user_memory
+        - manage_secrets
+
+  storage:
+    description: "Storage manager — organisation, backups, capacity monitoring"
+    preferred_skills: [general]
+    capabilities:
+      can:
+        - read_storage_metrics
+        - write_storage_config
+        - create_backups
+        - read_file_metadata
+      cannot:
+        - read_file_contents
+        - execute_shell
+        - manage_secrets
+        - network_access
