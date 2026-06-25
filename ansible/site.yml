@@ -1,17 +1,38 @@
 ---
-# PLABS Full Stack
+# PLABS Full Stack — runs top to bottom in order
 # Usage: ansible-playbook -i inventory.yml site.yml -e @vars.yml
 
-- name: Docker OS — services backbone
+# 1. Configure Proxmox host (IOMMU, VFIO, repos, NUMA)
+- name: Proxmox host
+  hosts: proxmox
+  roles:
+    - proxmox_host
+
+# 2. Create all VMs inside Proxmox + GPU passthrough
+- name: Create VMs
+  hosts: proxmox
+  roles:
+    - proxmox_vms
+
+# 3. Storage — TrueNAS configured via web UI, just verify it's up
+- name: TrueNAS
+  hosts: truenas
+  tasks:
+    - name: Confirm TrueNAS is reachable
+      ping:
+
+# 4. Docker OS — services backbone (Gitea, Postgres, Portainer)
+- name: Docker OS
   hosts: docker_os
   roles:
-    - docker
     - nfs_client
+    - docker
     - postgres
     - gitea
     - portainer
 
-- name: AIDA OS — AI inference + agents
+# 5. AIDA OS — AI inference + agents
+- name: AIDA OS
   hosts: aida_os
   roles:
     - nfs_client
@@ -20,14 +41,9 @@
     - litellm
     - aida_daemon
 
-- name: Dev OS — user workstations
+# 6. Dev OS — user workstations
+- name: Dev OS
   hosts: dev_os
   roles:
     - nfs_client
     - dev_tools
-
-- name: TrueNAS — storage (web UI config, just verify reachable)
-  hosts: truenas
-  tasks:
-    - name: Confirm TrueNAS is reachable
-      ping:

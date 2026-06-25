@@ -1,0 +1,159 @@
+---
+# Creates all VMs inside Proxmox using the API
+# Runs on the Proxmox host itself
+
+- name: Install Proxmox Python SDK
+  pip:
+    name: proxmoxer
+    state: present
+
+- name: Download TrueNAS ISO
+  get_url:
+    url: "https://download.truenas.com/TrueNAS-SCALE-Goldeye/25.10.1/TrueNAS-SCALE-25.10.1.iso"
+    dest: "/var/lib/vz/template/iso/truenas-25.10.1.iso"
+    timeout: 3600
+  async: 3600
+  poll: 30
+
+- name: Download Ubuntu Server ISO
+  get_url:
+    url: "https://releases.ubuntu.com/24.04/ubuntu-24.04.2-live-server-amd64.iso"
+    dest: "/var/lib/vz/template/iso/ubuntu-server.iso"
+    timeout: 3600
+  async: 3600
+  poll: 30
+
+- name: Create TrueNAS VM (100)
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: 100
+    name: truenas
+    cores: 4
+    memory: 8192
+    scsi: { scsi0: "local-lvm:32" }
+    ide: { ide2: "local:iso/truenas-25.10.1.iso,media=cdrom" }
+    net: { net0: "virtio,bridge=vmbr0" }
+    machine: q35
+    bios: ovmf
+    efidisk0: { storage: local-lvm, size: 1 }
+    boot: "order=ide2;scsi0"
+    onboot: true
+    state: present
+
+- name: Create AIDA OS VM (101)
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: 101
+    name: aida-os
+    cores: 12
+    memory: 32768
+    scsi: { scsi0: "local-lvm:100" }
+    ide: { ide2: "local:iso/aida-os-alpha.iso,media=cdrom" }
+    net: { net0: "virtio,bridge=vmbr0" }
+    machine: q35
+    bios: ovmf
+    efidisk0: { storage: local-lvm, size: 1 }
+    boot: "order=ide2;scsi0"
+    onboot: true
+    state: present
+
+- name: Create Docker OS VM (102)
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: 102
+    name: docker-os
+    cores: 8
+    memory: 16384
+    scsi: { scsi0: "local-lvm:200" }
+    ide: { ide2: "local:iso/ubuntu-server.iso,media=cdrom" }
+    net: { net0: "virtio,bridge=vmbr0" }
+    machine: q35
+    bios: ovmf
+    efidisk0: { storage: local-lvm, size: 1 }
+    boot: "order=ide2;scsi0"
+    onboot: true
+    state: present
+
+- name: Create Dev OS VM (103)
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: 103
+    name: dev-os
+    cores: 8
+    memory: 16384
+    scsi: { scsi0: "local-lvm:150" }
+    ide: { ide2: "local:iso/ubuntu-server.iso,media=cdrom" }
+    net: { net0: "virtio,bridge=vmbr0" }
+    machine: q35
+    bios: ovmf
+    efidisk0: { storage: local-lvm, size: 1 }
+    boot: "order=ide2;scsi0"
+    onboot: true
+    state: present
+
+- name: Create Windows Gaming VM (104)
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: 104
+    name: windows-gaming
+    cores: 16
+    memory: 49152
+    scsi: { scsi0: "local-lvm:300" }
+    net: { net0: "virtio,bridge=vmbr0" }
+    machine: q35
+    bios: ovmf
+    efidisk0: { storage: local-lvm, size: 1 }
+    ostype: win11
+    onboot: false
+    state: present
+
+- name: Pass GPU 1 to AIDA OS (101)
+  command: >
+    qm set 101 --hostpci0 {{ gpu_pci_0 }},pcie=1,x-vga=1
+  changed_when: true
+
+- name: Pass GPU 2 to Windows gaming (104)
+  command: >
+    qm set 104 --hostpci0 {{ gpu_pci_1 }},pcie=1,x-vga=1
+  changed_when: true
+
+- name: Start TrueNAS first
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: 100
+    state: started
+
+- name: Wait for TrueNAS to be reachable
+  wait_for:
+    host: "{{ truenas_ip }}"
+    port: 80
+    timeout: 300
+    delay: 30
+
+- name: Start remaining VMs
+  community.general.proxmox_kvm:
+    api_host: localhost
+    api_user: root@pam
+    api_password: "{{ proxmox_root_password }}"
+    node: "{{ ansible_hostname }}"
+    vmid: "{{ item }}"
+    state: started
+  loop: [101, 102, 103]

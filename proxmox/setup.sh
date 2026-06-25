@@ -1,58 +1,43 @@
 #!/bin/bash
-# PLABS — Master Setup Script
-# Run this ONE command after Proxmox is installed:
-#   curl -fsSL https://raw.githubusercontent.com/pirateben/aida-os/main/proxmox/setup.sh | bash
-#
-# What it does:
-#   1. Configures Proxmox host (IOMMU, NVIDIA passthrough, repos)
-#   2. Reboots
-#   3. On next boot — creates all VMs and runs Ansible on each
-#   4. You walk away and come back to a full stack
+# PLABS — One command to build the entire stack
+# Run this after Proxmox installs:
+#   curl -fsSL https://raw.githubusercontent.com/pirateben820/aida-os/main/proxmox/setup.sh | bash
 
 set -e
-REPO="https://raw.githubusercontent.com/pirateben/aida-os/main"
-WORK="/opt/plabs-setup"
-
 echo "======================================"
 echo "  PLABS Stack — One-Shot Setup"
 echo "======================================"
 
-mkdir -p "$WORK"
-cd "$WORK"
+# Install Ansible + Git
+apt-get update -qq
+apt-get install -y -qq git ansible python3-pip
+pip3 install proxmoxer -q
 
-# --- Step 1: Clone the repo ---
-apt-get install -y -qq git ansible python3
-git clone https://github.com/pirateben/aida-os.git . 2>/dev/null || git pull
+# Clone the repo
+git clone https://github.com/pirateben820/aida-os.git /opt/plabs-setup
+cd /opt/plabs-setup
 
-# --- Step 2: Run post-install (IOMMU, VFIO, repos, NVIDIA blacklist) ---
-bash proxmox/post-install.sh
+# Detect GPU PCI IDs and inject into vars
+GPU0=$(lspci | grep -i nvidia | grep -iv audio | awk 'NR==1{print $1}')
+GPU1=$(lspci | grep -i nvidia | grep -iv audio | awk 'NR==2{print $1}')
+echo "gpu_pci_0: \"$GPU0\"" >> ansible/vars.yml
+echo "gpu_pci_1: \"$GPU1\"" >> ansible/vars.yml
 
-# --- Step 3: Install first-boot service that creates VMs after reboot ---
-cat > /etc/systemd/system/plabs-firstboot.service << 'EOF'
-[Unit]
-Description=PLABS First Boot VM Setup
-After=network-online.target pve-manager.service
-Wants=network-online.target
-ConditionPathExists=/opt/plabs-setup/proxmox/firstboot.sh
+echo "Detected GPUs: $GPU0 and $GPU1"
+echo ""
+echo "Starting Ansible — this will configure the host,"
+echo "create all VMs, and set up every service."
+echo ""
 
-[Service]
-Type=oneshot
-ExecStart=/bin/bash /opt/plabs-setup/proxmox/firstboot.sh
-ExecStartPost=/bin/systemctl disable plabs-firstboot.service
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl enable plabs-firstboot.service
+# Run the full playbook
+ansible-playbook -i ansible/inventory.yml ansible/site.yml -e @ansible/vars.yml
 
 echo ""
 echo "======================================"
-echo "  Rebooting in 10 seconds..."
-echo "  After reboot, VMs will be created"
-echo "  automatically. Check progress at:"
-echo "  https://$(hostname -I | awk '{print $1}'):8006"
+echo "  DONE. Your stack is ready:"
+echo "  Proxmox:   https://192.168.88.3:8006"
+echo "  Gitea:     http://192.168.88.11:3000"
+echo "  AI API:    http://192.168.88.10:4000"
+echo "  Portainer: http://192.168.88.11:9000"
+echo "  TrueNAS:   http://192.168.88.13"
 echo "======================================"
-sleep 10
-reboot
