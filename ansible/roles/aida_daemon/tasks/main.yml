@@ -1,0 +1,58 @@
+---
+- name: Install AIDA OS dependencies
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+      - git
+    state: present
+    update_cache: true
+
+- name: Clone AIDA OS repo from Gitea
+  git:
+    repo: "http://192.168.88.11:3000/plabs/aida-os.git"
+    dest: /opt/aida-os
+    version: main
+    force: true
+
+- name: Install Python deps
+  pip:
+    requirements: /opt/aida-os/pyproject.toml
+    virtualenv: /opt/aida-os/.venv
+    virtualenv_command: python3 -m venv
+
+- name: Write AIDA daemon config
+  copy:
+    dest: /opt/aida-os/config/settings.yaml
+    content: |
+      bus:
+        url: nats://192.168.88.10:4222
+      mpi:
+        url: http://192.168.88.10:4000/v1
+        api_key: "spy820BH!"
+      local_first: true
+
+- name: Install AIDA systemd service
+  copy:
+    dest: /etc/systemd/system/aidad.service
+    content: |
+      [Unit]
+      Description=AIDA Daemon
+      After=network.target
+
+      [Service]
+      WorkingDirectory=/opt/aida-os
+      ExecStart=/opt/aida-os/.venv/bin/python -m aidad
+      Restart=always
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: Enable and start AIDA daemon
+  systemd:
+    name: aidad
+    enabled: true
+    state: started
+    daemon_reload: true

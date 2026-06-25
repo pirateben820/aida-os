@@ -1,0 +1,39 @@
+---
+- name: Create Gitea data dir on NFS
+  file:
+    path: /mnt/store/gitea
+    state: directory
+    mode: '0755'
+
+- name: Deploy Gitea via Docker Compose
+  docker_compose_v2:
+    project_name: gitea
+    definition:
+      services:
+        gitea:
+          image: gitea/gitea:latest
+          restart: always
+          ports:
+            - "3000:3000"
+            - "2222:22"
+          volumes:
+            - /mnt/store/gitea:/data
+          environment:
+            USER_UID: "1000"
+            USER_GID: "1000"
+            GITEA__database__DB_TYPE: postgres
+            GITEA__database__HOST: postgres:5432
+            GITEA__database__NAME: gitea
+            GITEA__database__USER: gitea
+            GITEA__database__PASSWD: "{{ gitea_db_password }}"
+          depends_on:
+            - postgres
+        postgres:
+          image: postgres:16
+          restart: always
+          volumes:
+            - /mnt/store/postgres:/var/lib/postgresql/data
+          environment:
+            POSTGRES_USER: gitea
+            POSTGRES_PASSWORD: "{{ gitea_db_password }}"
+            POSTGRES_DB: gitea

@@ -1,0 +1,38 @@
+---
+- name: Install dev tools
+  apt:
+    name:
+      - git
+      - curl
+      - wget
+      - python3
+      - python3-pip
+      - nodejs
+      - npm
+      - build-essential
+      - code               # VS Code server (if available)
+      - openssh-server
+    state: present
+    update_cache: true
+
+- name: Configure git to use Gitea
+  git_config:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    scope: system
+  loop:
+    - { name: "url.http://192.168.88.11:3000/.insteadOf", value: "git@plabs-git:" }
+
+- name: Install Claude Code
+  npm:
+    name: "@anthropic-ai/claude-code"
+    global: true
+    state: present
+
+- name: Create shared code symlink from NFS
+  file:
+    src: /mnt/store/code
+    dest: /home/plabs/code
+    state: link
+    owner: plabs
+    group: plabs

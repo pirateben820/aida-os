@@ -1,12 +1,44 @@
-name: Build AIDA OS ISO
+name: Build ISOs
 
 on:
   push:
     branches: [main]
-  workflow_dispatch:   # lets you trigger it manually from GitHub
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-proxmox-iso:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install proxmox-auto-install-assistant
+        run: |
+          wget -q https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg -O /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg
+          echo "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription" >> /etc/apt/sources.list
+          apt-get update -qq
+          apt-get install -y -qq proxmox-auto-install-assistant
+
+      - name: Download Proxmox ISO
+        run: wget -q -O proxmox-ve_9.2-1.iso https://enterprise.proxmox.com/iso/proxmox-ve_9.2-1.iso
+
+      - name: Build custom Proxmox ISO with answer file
+        run: |
+          proxmox-auto-install-assistant prepare-iso proxmox-ve_9.2-1.iso \
+            --fetch-from iso \
+            --answer-file proxmox/answer.toml \
+            --output dist/proxmox-ve_9.2-plabs.iso
+
+      - name: Upload Proxmox ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: proxmox-plabs-iso
+          path: dist/proxmox-ve_9.2-plabs.iso
+          retention-days: 30
+
+  build-aida-iso:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:

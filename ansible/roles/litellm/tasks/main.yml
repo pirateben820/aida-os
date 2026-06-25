@@ -1,0 +1,109 @@
+---
+# LiteLLM — unified API gateway with queue + timeout
+# Queue:   Redis holds waiting requests, up to 100 in line
+# Timeout: requests killed after 5 min (300s) — caller gets "too busy" error
+# Busy:    queue full → immediate rejection with clear message
+
+- name: Write LiteLLM config
+  copy:
+    dest: /mnt/store/localai/litellm-config.yaml
+    content: |
+      model_list:
+        # Text / chat
+        - model_name: gpt-4
+          litellm_params:
+            model: openai/llama3.1:70b
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 300          # kill after 5 min
+            stream_timeout: 300
+
+        - model_name: gpt-3.5-turbo
+          litellm_params:
+            model: openai/llama3.1:70b
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 300
+            stream_timeout: 300
+
+        # Coding — no total timeout, but killed if silent for 60s (stuck/confused)
+        - model_name: qwen-coder
+          litellm_params:
+            model: openai/qwen2.5-coder:32b
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 86400        # 24h — effectively never
+            stream_timeout: 60    # kill if no new tokens for 60s = confused/stuck
+
+        # Image generation — longer timeout, images take time
+        - model_name: dall-e-3
+          litellm_params:
+            model: openai/flux
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 600          # 10 min for image gen
+
+        # Voice in
+        - model_name: whisper-1
+          litellm_params:
+            model: openai/whisper-1
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 120
+
+        # Voice out
+        - model_name: tts-1
+          litellm_params:
+            model: openai/tts-1
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 120
+
+        # Embeddings — fast, short timeout
+        - model_name: text-embedding-ada-002
+          litellm_params:
+            model: openai/nomic-embed-text
+            api_base: http://localai:8080/v1
+            api_key: plabs-local
+            timeout: 60
+
+      litellm_settings:
+        drop_params: true
+        # Redis queue — holds waiting requests when GPU is busy
+        redis_host: redis
+        redis_port: 6379
+        # Queue settings
+        max_parallel_requests: 10       # max running at once
+        max_request_queue_depth: 100    # max waiting in line
+        # What to tell the caller when too busy
+        service_unavailable_error_message: "PLABS AI is too busy right now. Your request has been queued. If it takes longer than expected, please try again in a few minutes."
+
+      general_settings:
+        master_key: "spy820BH!"
+        # Return queue position to caller so they know where they stand
+        return_response_headers: true
+
+- name: Deploy LiteLLM + Redis via Docker Compose
+  docker_compose_v2:
+    project_name: litellm
+    definition:
+      services:
+        redis:
+          image: redis:7-alpine
+          restart: always
+          volumes:
+            - /mnt/store/localai/redis:/data
+          command: redis-server --save 60 1 --loglevel warning
+
+        litellm:
+          image: ghcr.io/berriai/litellm:main-latest
+          restart: always
+          ports:
+            - "4000:4000"
+          volumes:
+            - /mnt/store/localai/litellm-config.yaml:/app/config.yaml
+          command: --config /app/config.yaml --port 4000
+          depends_on:
+            - redis
+          environment:
+            REDIS_URL: redis://redis:6379

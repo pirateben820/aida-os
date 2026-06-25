@@ -9,3 +9,7 @@ build/
 .pytest_cache/
 .ruff_cache/
 ~/.aida/
+
+# Secrets — never commit
+ansible/vars.yml
+proxmox/answer.toml

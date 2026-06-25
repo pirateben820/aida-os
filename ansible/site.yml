@@ -1,0 +1,33 @@
+---
+# PLABS Full Stack
+# Usage: ansible-playbook -i inventory.yml site.yml -e @vars.yml
+
+- name: Docker OS — services backbone
+  hosts: docker_os
+  roles:
+    - docker
+    - nfs_client
+    - postgres
+    - gitea
+    - portainer
+
+- name: AIDA OS — AI inference + agents
+  hosts: aida_os
+  roles:
+    - nfs_client
+    - nats
+    - localai
+    - litellm
+    - aida_daemon
+
+- name: Dev OS — user workstations
+  hosts: dev_os
+  roles:
+    - nfs_client
+    - dev_tools
+
+- name: TrueNAS — storage (web UI config, just verify reachable)
+  hosts: truenas
+  tasks:
+    - name: Confirm TrueNAS is reachable
+      ping:

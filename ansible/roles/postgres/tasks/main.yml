@@ -1,0 +1,17 @@
+---
+- name: Deploy Postgres via Docker Compose
+  docker_compose_v2:
+    project_name: postgres
+    definition:
+      services:
+        postgres:
+          image: postgres:16
+          restart: always
+          ports:
+            - "5432:5432"
+          volumes:
+            - /mnt/store/data/postgres:/var/lib/postgresql/data
+          environment:
+            POSTGRES_USER: plabs
+            POSTGRES_PASSWORD: "{{ postgres_password }}"
+            POSTGRES_DB: plabs

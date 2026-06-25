@@ -1,0 +1,116 @@
+---
+# LocalAI — dynamic GPU allocation
+# Models load when called, unload when idle — no fixed GPU assignment
+# Both RTX 3060s are shared, first available wins
+
+- name: Create LocalAI directories on NFS
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /mnt/store/models
+    - /mnt/store/localai/config
+
+- name: Restore models from Windows backup if present
+  shell: |
+    if [ -d /mnt/store/PLABS_BACKUP/.ollama/models ]; then
+      cp -rn /mnt/store/PLABS_BACKUP/.ollama/models/* /mnt/store/models/ && \
+      echo "Models restored from backup"
+    else
+      echo "No backup found - models will download on first use"
+    fi
+  register: model_restore
+  changed_when: "'restored' in model_restore.stdout"
+
+- name: Deploy LocalAI via Docker Compose
+  docker_compose_v2:
+    project_name: localai
+    definition:
+      services:
+        localai:
+          image: localai/localai:latest-nvidia
+          restart: always
+          ports:
+            - "8080:8080"
+          volumes:
+            - /mnt/store/models:/build/models
+            - /mnt/store/localai/config:/build/config
+          environment:
+            LOCALAI_LOG_LEVEL: info
+            LOCALAI_MODELS_PATH: /build/models
+            LOCALAI_CONFIG_FILE: /build/config
+            # All GPUs available to all models — dynamic allocation
+            CUDA_VISIBLE_DEVICES: "0,1"
+            # Unload model from VRAM after 5 min idle — makes room for next request
+            LOCALAI_SINGLE_ACTIVE_BACKEND: "false"
+            LOCALAI_PARALLEL_REQUESTS: "true"
+            LOCALAI_WATCHDOG_IDLE: "300"
+            LOCALAI_WATCHDOG_BUSY: "900"
+          deploy:
+            resources:
+              reservations:
+                devices:
+                  - driver: nvidia
+                    count: all
+                    capabilities: [gpu]
+
+- name: Write model config — Llama 3.1 70B (text/chat)
+  copy:
+    dest: /mnt/store/localai/config/llama3-70b.yaml
+    content: |
+      name: llama3.1:70b
+      backend: vllm
+      parameters:
+        model: meta-llama/Meta-Llama-3.1-70B-Instruct
+      vllm:
+        gpu_memory_utilization: 0.85
+        tensor_parallel_size: 2
+
+- name: Write model config — Qwen2.5 Coder 32B (coding)
+  copy:
+    dest: /mnt/store/localai/config/qwen-coder.yaml
+    content: |
+      name: qwen2.5-coder:32b
+      backend: vllm
+      parameters:
+        model: Qwen/Qwen2.5-Coder-32B-Instruct
+      vllm:
+        gpu_memory_utilization: 0.85
+        tensor_parallel_size: 2
+
+- name: Write model config — Flux image gen
+  copy:
+    dest: /mnt/store/localai/config/flux.yaml
+    content: |
+      name: flux
+      backend: diffusers
+      parameters:
+        model: black-forest-labs/FLUX.1-schnell
+
+- name: Write model config — Whisper voice-to-text
+  copy:
+    dest: /mnt/store/localai/config/whisper.yaml
+    content: |
+      name: whisper-1
+      backend: whisper
+      parameters:
+        model: whisper-large-v3
+
+- name: Write model config — Piper TTS voice-out (CPU, never blocks GPU)
+  copy:
+    dest: /mnt/store/localai/config/tts.yaml
+    content: |
+      name: tts-1
+      backend: piper
+      parameters:
+        model: en-us-ryan-high
+
+- name: Write model config — Nomic embeddings
+  copy:
+    dest: /mnt/store/localai/config/embeddings.yaml
+    content: |
+      name: nomic-embed-text
+      backend: transformers
+      parameters:
+        model: nomic-ai/nomic-embed-text-v1.5
