@@ -6,6 +6,14 @@
 set -e
 echo "=== PLABS Proxmox Post-Install ==="
 
+# --- SSH — lock it in first so we never lose remote access ---
+systemctl enable ssh
+systemctl start ssh
+sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+systemctl restart ssh
+echo "SSH enabled on port 22 — root login allowed"
+
 # --- No-subscription repo ---
 sed -i 's|^deb https://enterprise.proxmox.com|# deb https://enterprise.proxmox.com|g' /etc/apt/sources.list.d/pve-enterprise.list
 echo "deb http://download.proxmox.com/debian/pve bookworm pve-no-subscription" > /etc/apt/sources.list.d/pve-no-sub.list
